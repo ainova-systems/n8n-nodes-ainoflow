@@ -88,11 +88,19 @@ interface GetUrlAdditionalFields {
 
 /** Additional fields for getMany operation */
 interface GetManyAdditionalFields {
-	offset?: number;
 	prefix?: string;
 	sortBy?: string;
 	sortOrder?: string;
-	aggregate?: boolean;
+}
+
+/** Aggregated response from API when aggregate=true */
+interface AggregatedResponse<T> {
+	category: string;
+	items: T[];
+	totalCount: number;
+	page: number;
+	pageSize: number;
+	totalPages: number;
 }
 
 // ============================================================================
@@ -473,6 +481,37 @@ export class AinoflowFiles implements INodeType {
 				default: 50,
 				description: 'Max number of results to return',
 			},
+			{
+				displayName: 'Page',
+				name: 'page',
+				type: 'number',
+				typeOptions: {
+					minValue: 1,
+				},
+				displayOptions: {
+					show: {
+						resource: ['file'],
+						operation: ['getMany'],
+						returnAll: [false],
+					},
+				},
+				default: 1,
+				description: 'Page number to return (starts from 1)',
+			},
+			{
+				displayName: 'Aggregate',
+				name: 'aggregate',
+				type: 'boolean',
+				displayOptions: {
+					show: {
+						resource: ['file'],
+						operation: ['getMany'],
+						returnAll: [false],
+					},
+				},
+				default: false,
+				description: 'Whether to return a single object with items array and pagination info instead of separate items',
+			},
 
 			// Get Many Additional Fields
 			{
@@ -489,28 +528,11 @@ export class AinoflowFiles implements INodeType {
 				default: {},
 				options: [
 					{
-						displayName: 'Offset',
-						name: 'offset',
-						type: 'number',
-						typeOptions: {
-							minValue: 0,
-						},
-						default: 0,
-						description: 'Number of results to skip for pagination',
-					},
-					{
 						displayName: 'Prefix',
 						name: 'prefix',
 						type: 'string',
 						default: '',
 						description: 'Filter files by key prefix',
-					},
-					{
-						displayName: 'Return Full Metadata',
-						name: 'aggregate',
-						type: 'boolean',
-						default: false,
-						description: 'Whether to return full file metadata',
 					},
 					{
 						displayName: 'Sort By',
@@ -529,6 +551,72 @@ export class AinoflowFiles implements INodeType {
 						description: 'Order of sorting',
 					},
 				],
+			},
+
+			// ----------------------------------------------------------------
+			// Category: Get Many - Return All / Limit / Page / Aggregate
+			// ----------------------------------------------------------------
+			{
+				displayName: 'Return All',
+				name: 'returnAll',
+				type: 'boolean',
+				displayOptions: {
+					show: {
+						resource: ['category'],
+						operation: ['getMany'],
+					},
+				},
+				default: false,
+				description: 'Whether to return all results or only up to a given limit',
+			},
+			{
+				displayName: 'Limit',
+				name: 'limit',
+				type: 'number',
+				typeOptions: {
+					minValue: 1,
+					maxValue: 1000,
+				},
+				displayOptions: {
+					show: {
+						resource: ['category'],
+						operation: ['getMany'],
+						returnAll: [false],
+					},
+				},
+				default: 50,
+				description: 'Max number of results to return',
+			},
+			{
+				displayName: 'Page',
+				name: 'page',
+				type: 'number',
+				typeOptions: {
+					minValue: 1,
+				},
+				displayOptions: {
+					show: {
+						resource: ['category'],
+						operation: ['getMany'],
+						returnAll: [false],
+					},
+				},
+				default: 1,
+				description: 'Page number to return (starts from 1)',
+			},
+			{
+				displayName: 'Aggregate',
+				name: 'aggregate',
+				type: 'boolean',
+				displayOptions: {
+					show: {
+						resource: ['category'],
+						operation: ['getMany'],
+						returnAll: [false],
+					},
+				},
+				default: false,
+				description: 'Whether to return a single object with items array and pagination info instead of separate items',
 			},
 		],
 	};
@@ -855,11 +943,12 @@ async function executeGetUrl(
 
 /**
  * Get many files in a category with pagination.
+ * Returns array of items or aggregated response based on aggregate parameter.
  */
 async function executeFileGetMany(
 	this: IExecuteFunctions,
 	itemIndex: number,
-): Promise<FileListItem[]> {
+): Promise<FileListItem[] | AggregatedResponse<FileListItem>> {
 	const category = this.getNodeParameter('category', itemIndex) as string;
 	const returnAll = this.getNodeParameter('returnAll', itemIndex) as boolean;
 	const options = this.getNodeParameter('getManyOptions', itemIndex, {}) as GetManyAdditionalFields;
@@ -868,20 +957,19 @@ async function executeFileGetMany(
 	const baseURL = await getBaseUrl(this);
 
 	if (returnAll) {
-		// Paginate through all results
+		// Paginate through all results - aggregate not available with returnAll
 		const allItems: FileListItem[] = [];
-		let offset = options.offset || 0;
+		let page = 1;
 		let hasMore = true;
 
 		while (hasMore) {
 			const qs: Record<string, string | number | boolean> = {
+				page,
 				limit: MAX_LIMIT_PER_REQUEST,
-				offset,
 			};
 			if (options.prefix) qs.prefix = options.prefix;
 			if (options.sortBy) qs.sortBy = options.sortBy;
 			if (options.sortOrder) qs.sortOrder = options.sortOrder;
-			if (options.aggregate) qs.aggregate = options.aggregate;
 
 			const requestOptions: IHttpRequestOptions = {
 				method: 'GET' as IHttpRequestMethods,
@@ -897,16 +985,16 @@ async function executeFileGetMany(
 					requestOptions,
 				);
 
-				// Handle both array and wrapped response formats
+				// API returns array when aggregate is not set
 				const items = Array.isArray(response)
 					? response
-					: (response as { items: FileListItem[] }).items || [];
+					: (response as AggregatedResponse<FileListItem>).items || [];
 
 				allItems.push(...items);
 
 				// Check if there are more pages
 				hasMore = items.length === MAX_LIMIT_PER_REQUEST;
-				offset += MAX_LIMIT_PER_REQUEST;
+				page++;
 			} catch (error) {
 				throw handleApiError(this, error, itemIndex, 'get many files', 'file');
 			}
@@ -914,15 +1002,19 @@ async function executeFileGetMany(
 
 		return allItems;
 	} else {
-		// Single request with limit
+		// Single request with limit, page, and optional aggregate
 		const limit = this.getNodeParameter('limit', itemIndex) as number;
+		const page = this.getNodeParameter('page', itemIndex) as number;
+		const aggregate = this.getNodeParameter('aggregate', itemIndex) as boolean;
 
-		const qs: Record<string, string | number | boolean> = { limit };
-		if (options.offset) qs.offset = options.offset;
+		const qs: Record<string, string | number | boolean> = {
+			page,
+			limit,
+		};
 		if (options.prefix) qs.prefix = options.prefix;
 		if (options.sortBy) qs.sortBy = options.sortBy;
 		if (options.sortOrder) qs.sortOrder = options.sortOrder;
-		if (options.aggregate) qs.aggregate = options.aggregate;
+		if (aggregate) qs.aggregate = true;
 
 		const requestOptions: IHttpRequestOptions = {
 			method: 'GET' as IHttpRequestMethods,
@@ -938,10 +1030,14 @@ async function executeFileGetMany(
 				requestOptions,
 			);
 
-			// Handle both array and wrapped response formats
+			// When aggregate=true, return the full response object
+			// When aggregate=false, return just the items array
+			if (aggregate) {
+				return response as AggregatedResponse<FileListItem>;
+			}
 			return Array.isArray(response)
 				? response
-				: (response as { items: FileListItem[] }).items || [];
+				: (response as AggregatedResponse<FileListItem>).items || [];
 		} catch (error) {
 			throw handleApiError(this, error, itemIndex, 'get many files', 'file');
 		}
@@ -973,30 +1069,95 @@ async function executeCategoryOperation(
 }
 
 /**
- * Get all categories with file counts.
+ * Get categories with file counts and pagination support.
  */
 async function executeCategoryGetMany(
 	this: IExecuteFunctions,
 	itemIndex: number,
-): Promise<CategoryInfo[]> {
+): Promise<CategoryInfo[] | AggregatedResponse<CategoryInfo>> {
+	const returnAll = this.getNodeParameter('returnAll', itemIndex) as boolean;
+
 	// Get base URL from credentials
 	const baseURL = await getBaseUrl(this);
 
-	const requestOptions: IHttpRequestOptions = {
-		method: 'GET' as IHttpRequestMethods,
-		baseURL,
-		url: API_BASE_PATH,
-	};
+	if (returnAll) {
+		// Paginate through all results
+		const allItems: CategoryInfo[] = [];
+		let page = 1;
+		let hasMore = true;
 
-	try {
-		const response = await this.helpers.httpRequestWithAuthentication.call(
-			this,
-			CREDENTIAL_NAME,
-			requestOptions,
-		);
-		return response as CategoryInfo[];
-	} catch (error) {
-		throw handleApiError(this, error, itemIndex, 'get categories', 'file');
+		while (hasMore) {
+			const qs: Record<string, string | number | boolean> = {
+				page,
+				limit: MAX_LIMIT_PER_REQUEST,
+			};
+
+			const requestOptions: IHttpRequestOptions = {
+				method: 'GET' as IHttpRequestMethods,
+				baseURL,
+				url: API_BASE_PATH,
+				qs,
+			};
+
+			try {
+				const response = await this.helpers.httpRequestWithAuthentication.call(
+					this,
+					CREDENTIAL_NAME,
+					requestOptions,
+				);
+
+				const items = Array.isArray(response)
+					? response
+					: (response as AggregatedResponse<CategoryInfo>).items || [];
+
+				allItems.push(...items);
+
+				// Check if there are more pages
+				hasMore = items.length === MAX_LIMIT_PER_REQUEST;
+				page++;
+			} catch (error) {
+				throw handleApiError(this, error, itemIndex, 'get categories', 'file');
+			}
+		}
+
+		return allItems;
+	} else {
+		// Single request with limit, page, and optional aggregate
+		const limit = this.getNodeParameter('limit', itemIndex) as number;
+		const page = this.getNodeParameter('page', itemIndex) as number;
+		const aggregate = this.getNodeParameter('aggregate', itemIndex) as boolean;
+
+		const qs: Record<string, string | number | boolean> = {
+			page,
+			limit,
+		};
+
+		if (aggregate) qs.aggregate = true;
+
+		const requestOptions: IHttpRequestOptions = {
+			method: 'GET' as IHttpRequestMethods,
+			baseURL,
+			url: API_BASE_PATH,
+			qs,
+		};
+
+		try {
+			const response = await this.helpers.httpRequestWithAuthentication.call(
+				this,
+				CREDENTIAL_NAME,
+				requestOptions,
+			);
+
+			// When aggregate=true, return the full response object
+			if (aggregate) {
+				return response as AggregatedResponse<CategoryInfo>;
+			}
+			return Array.isArray(response)
+				? response
+				: (response as AggregatedResponse<CategoryInfo>).items || [];
+		} catch (error) {
+			throw handleApiError(this, error, itemIndex, 'get categories', 'file');
+		}
 	}
 }
 

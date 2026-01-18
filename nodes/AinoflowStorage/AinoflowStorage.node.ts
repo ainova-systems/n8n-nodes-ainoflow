@@ -55,7 +55,16 @@ interface UpdateAdditionalFields {
 interface GetManyAdditionalFields {
 	sortBy?: SortByField;
 	sortOrder?: SortOrder;
-	aggregate?: boolean;
+}
+
+/** Aggregated response from API when aggregate=true */
+interface AggregatedResponse<T> {
+	category: string;
+	items: T[];
+	totalCount: number;
+	page: number;
+	pageSize: number;
+	totalPages: number;
 }
 
 /** API response for record mutations */
@@ -413,6 +422,37 @@ export class AinoflowStorage implements INodeType {
 				default: 50,
 				description: 'Max number of results to return',
 			},
+			{
+				displayName: 'Page',
+				name: 'page',
+				type: 'number',
+				typeOptions: {
+					minValue: 1,
+				},
+				displayOptions: {
+					show: {
+						resource: ['record'],
+						operation: ['getMany'],
+						returnAll: [false],
+					},
+				},
+				default: 1,
+				description: 'Page number to return (starts from 1)',
+			},
+			{
+				displayName: 'Aggregate',
+				name: 'aggregate',
+				type: 'boolean',
+				displayOptions: {
+					show: {
+						resource: ['record'],
+						operation: ['getMany'],
+						returnAll: [false],
+					},
+				},
+				default: false,
+				description: 'Whether to return a single object with items array and pagination info instead of separate items',
+			},
 
 			// ----------------------------------------------------------------
 			// Additional Fields: Create
@@ -508,13 +548,6 @@ export class AinoflowStorage implements INodeType {
 				options: [
 					// Alphabetized by displayName
 					{
-						displayName: 'Return Full Metadata',
-						name: 'aggregate',
-						type: 'boolean',
-						default: false,
-						description: 'Whether to return full record metadata',
-					},
-					{
 						displayName: 'Sort By',
 						name: 'sortBy',
 						type: 'options',
@@ -531,6 +564,72 @@ export class AinoflowStorage implements INodeType {
 						description: 'Order of sorting (default: Ascending)',
 					},
 				],
+			},
+
+			// ----------------------------------------------------------------
+			// Category: Get Many - Return All / Limit / Page / Aggregate
+			// ----------------------------------------------------------------
+			{
+				displayName: 'Return All',
+				name: 'returnAll',
+				type: 'boolean',
+				displayOptions: {
+					show: {
+						resource: ['category'],
+						operation: ['getMany'],
+					},
+				},
+				default: false,
+				description: 'Whether to return all results or only up to a given limit',
+			},
+			{
+				displayName: 'Limit',
+				name: 'limit',
+				type: 'number',
+				typeOptions: {
+					minValue: 1,
+					maxValue: 1000,
+				},
+				displayOptions: {
+					show: {
+						resource: ['category'],
+						operation: ['getMany'],
+						returnAll: [false],
+					},
+				},
+				default: 50,
+				description: 'Max number of results to return',
+			},
+			{
+				displayName: 'Page',
+				name: 'page',
+				type: 'number',
+				typeOptions: {
+					minValue: 1,
+				},
+				displayOptions: {
+					show: {
+						resource: ['category'],
+						operation: ['getMany'],
+						returnAll: [false],
+					},
+				},
+				default: 1,
+				description: 'Page number to return (starts from 1)',
+			},
+			{
+				displayName: 'Aggregate',
+				name: 'aggregate',
+				type: 'boolean',
+				displayOptions: {
+					show: {
+						resource: ['category'],
+						operation: ['getMany'],
+						returnAll: [false],
+					},
+				},
+				default: false,
+				description: 'Whether to return a single object with items array and pagination info instead of separate items',
 			},
 		],
 	};
@@ -862,11 +961,12 @@ async function executeGetMetadata(
 
 /**
  * Get many records in a category with pagination.
+ * Returns array of items or aggregated response based on aggregate parameter.
  */
 async function executeRecordGetMany(
 	this: IExecuteFunctions,
 	itemIndex: number,
-): Promise<RecordListItem[]> {
+): Promise<RecordListItem[] | AggregatedResponse<RecordListItem>> {
 	const category = this.getNodeParameter('category', itemIndex) as string;
 	const returnAll = this.getNodeParameter('returnAll', itemIndex) as boolean;
 	const additionalFields = this.getNodeParameter('additionalFields', itemIndex) as GetManyAdditionalFields;
@@ -875,7 +975,7 @@ async function executeRecordGetMany(
 	const baseURL = await getBaseUrl(this);
 
 	if (returnAll) {
-		// Paginate through all results
+		// Paginate through all results - aggregate not available with returnAll
 		const allItems: RecordListItem[] = [];
 		let page = 1;
 		let hasMore = true;
@@ -888,7 +988,6 @@ async function executeRecordGetMany(
 
 			if (additionalFields.sortBy) qs.sortBy = additionalFields.sortBy;
 			if (additionalFields.sortOrder) qs.sortOrder = additionalFields.sortOrder;
-			if (additionalFields.aggregate) qs.aggregate = additionalFields.aggregate;
 
 			const requestOptions: IHttpRequestOptions = {
 				method: 'GET' as IHttpRequestMethods,
@@ -904,10 +1003,10 @@ async function executeRecordGetMany(
 					requestOptions,
 				);
 
-				// Handle both array and aggregated response formats
+				// API returns array when aggregate is not set
 				const items = Array.isArray(response)
 					? response
-					: (response as { items: RecordListItem[] }).items || [];
+					: (response as AggregatedResponse<RecordListItem>).items || [];
 
 				allItems.push(...items);
 
@@ -921,17 +1020,19 @@ async function executeRecordGetMany(
 
 		return allItems;
 	} else {
-		// Single request with limit
+		// Single request with limit, page, and optional aggregate
 		const limit = this.getNodeParameter('limit', itemIndex) as number;
+		const page = this.getNodeParameter('page', itemIndex) as number;
+		const aggregate = this.getNodeParameter('aggregate', itemIndex) as boolean;
 
 		const qs: Record<string, string | number | boolean> = {
-			page: 1,
+			page,
 			limit,
 		};
 
 		if (additionalFields.sortBy) qs.sortBy = additionalFields.sortBy;
 		if (additionalFields.sortOrder) qs.sortOrder = additionalFields.sortOrder;
-		if (additionalFields.aggregate) qs.aggregate = additionalFields.aggregate;
+		if (aggregate) qs.aggregate = true;
 
 		const requestOptions: IHttpRequestOptions = {
 			method: 'GET' as IHttpRequestMethods,
@@ -947,10 +1048,14 @@ async function executeRecordGetMany(
 				requestOptions,
 			);
 
-			// Handle both array and aggregated response formats
+			// When aggregate=true, return the full response object
+			// When aggregate=false, return just the items array
+			if (aggregate) {
+				return response as AggregatedResponse<RecordListItem>;
+			}
 			return Array.isArray(response)
 				? response
-				: (response as { items: RecordListItem[] }).items || [];
+				: (response as AggregatedResponse<RecordListItem>).items || [];
 		} catch (error) {
 			throw handleApiError(this, error, itemIndex, 'get many records', 'record');
 		}
@@ -982,30 +1087,95 @@ async function executeCategoryOperation(
 }
 
 /**
- * Get all categories with record counts.
+ * Get categories with record counts and pagination support.
  */
 async function executeCategoryGetMany(
 	this: IExecuteFunctions,
 	itemIndex: number,
-): Promise<CategoryItem[]> {
+): Promise<CategoryItem[] | AggregatedResponse<CategoryItem>> {
+	const returnAll = this.getNodeParameter('returnAll', itemIndex) as boolean;
+
 	// Get base URL from credentials
 	const baseURL = await getBaseUrl(this);
 
-	const requestOptions: IHttpRequestOptions = {
-		method: 'GET' as IHttpRequestMethods,
-		baseURL,
-		url: API_BASE_PATH,
-	};
+	if (returnAll) {
+		// Paginate through all results
+		const allItems: CategoryItem[] = [];
+		let page = 1;
+		let hasMore = true;
 
-	try {
-		const response = await this.helpers.httpRequestWithAuthentication.call(
-			this,
-			CREDENTIAL_NAME,
-			requestOptions,
-		);
-		return response as CategoryItem[];
-	} catch (error) {
-		throw handleApiError(this, error, itemIndex, 'get categories', 'record');
+		while (hasMore) {
+			const qs: Record<string, string | number | boolean> = {
+				page,
+				limit: MAX_LIMIT_PER_REQUEST,
+			};
+
+			const requestOptions: IHttpRequestOptions = {
+				method: 'GET' as IHttpRequestMethods,
+				baseURL,
+				url: API_BASE_PATH,
+				qs,
+			};
+
+			try {
+				const response = await this.helpers.httpRequestWithAuthentication.call(
+					this,
+					CREDENTIAL_NAME,
+					requestOptions,
+				);
+
+				const items = Array.isArray(response)
+					? response
+					: (response as AggregatedResponse<CategoryItem>).items || [];
+
+				allItems.push(...items);
+
+				// Check if there are more pages
+				hasMore = items.length === MAX_LIMIT_PER_REQUEST;
+				page++;
+			} catch (error) {
+				throw handleApiError(this, error, itemIndex, 'get categories', 'record');
+			}
+		}
+
+		return allItems;
+	} else {
+		// Single request with limit, page, and optional aggregate
+		const limit = this.getNodeParameter('limit', itemIndex) as number;
+		const page = this.getNodeParameter('page', itemIndex) as number;
+		const aggregate = this.getNodeParameter('aggregate', itemIndex) as boolean;
+
+		const qs: Record<string, string | number | boolean> = {
+			page,
+			limit,
+		};
+
+		if (aggregate) qs.aggregate = true;
+
+		const requestOptions: IHttpRequestOptions = {
+			method: 'GET' as IHttpRequestMethods,
+			baseURL,
+			url: API_BASE_PATH,
+			qs,
+		};
+
+		try {
+			const response = await this.helpers.httpRequestWithAuthentication.call(
+				this,
+				CREDENTIAL_NAME,
+				requestOptions,
+			);
+
+			// When aggregate=true, return the full response object
+			if (aggregate) {
+				return response as AggregatedResponse<CategoryItem>;
+			}
+			return Array.isArray(response)
+				? response
+				: (response as AggregatedResponse<CategoryItem>).items || [];
+		} catch (error) {
+			throw handleApiError(this, error, itemIndex, 'get categories', 'record');
+		}
 	}
 }
 

@@ -1,2 +1,12 @@
 dist
 node_modules
+
+# Build artifacts in source directories
+nodes/**/*.js
+nodes/**/*.js.map
+nodes/**/*.d.ts
+nodes/**/*.d.ts.map
+credentials/**/*.js
+credentials/**/*.js.map
+credentials/**/*.d.ts
+credentials/**/*.d.ts.map
