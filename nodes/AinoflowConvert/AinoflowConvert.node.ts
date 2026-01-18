@@ -8,6 +8,7 @@ import type {
 	JsonObject,
 } from 'n8n-workflow';
 import { NodeConnectionTypes, NodeApiError, NodeOperationError } from 'n8n-workflow';
+import { CREDENTIAL_NAME, DEFAULT_BASE_URL, getBaseUrl, handleApiError } from '../GenericFunctions';
 
 // ============================================================================
 // Type Definitions
@@ -192,9 +193,6 @@ const RESPONSE_MODE_OPTIONS = [
 	{ name: 'Webhook', value: 'webhook', description: 'Notify webhook URL when complete' },
 ] as const;
 
-/** Credential type name */
-const CREDENTIAL_NAME = 'ainoflowApi';
-
 /** Default timeout for API requests (10 minutes for large files) */
 const REQUEST_TIMEOUT_MS = 600000;
 
@@ -213,7 +211,7 @@ export class AinoflowConvert implements INodeType {
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"]}}',
-		description: 'Convert documents, images, and audio to text using OCR and transcription',
+		description: 'Extract text or convert to PDF from documents, images, and audio (OCR & transcription)',
 		defaults: {
 			name: 'Ainoflow Convert',
 		},
@@ -237,10 +235,10 @@ export class AinoflowConvert implements INodeType {
 				noDataExpression: true,
 				options: [
 					{
-						name: 'Convert Document',
+						name: 'Convert File',
 						value: 'convert',
-						description: 'Convert document, image, or audio to text',
-						action: 'Convert document to text',
+						description: 'Extract text or convert to PDF from document, image, or audio',
+						action: 'Convert file to text or PDF',
 					},
 					{
 						name: 'Get Result',
@@ -572,6 +570,9 @@ async function submitViaUrl(
 		);
 	}
 
+	// Get base URL from credentials
+	const baseURL = await getBaseUrl(this);
+
 	// Build request body with defaults
 	const body: Record<string, unknown> = {
 		sourceUrl,
@@ -594,6 +595,7 @@ async function submitViaUrl(
 
 	const requestOptions: IHttpRequestOptions = {
 		method: 'POST' as IHttpRequestMethods,
+		baseURL,
 		url: '/api/v1/convert/submit-url',
 		body,
 		timeout: REQUEST_TIMEOUT_MS,
@@ -607,7 +609,7 @@ async function submitViaUrl(
 		);
 		return response as ConvertApiResponse;
 	} catch (error) {
-		throw handleApiError.call(this, error, itemIndex, 'submit document via URL');
+		throw handleApiError(this, error, itemIndex, 'submit document via URL', 'job');
 	}
 }
 
@@ -680,7 +682,7 @@ async function submitViaBinary(
 	// Get credentials for manual header construction
 	// Note: httpRequestWithAuthentication doesn't support raw Buffer body with multipart
 	const credentials = await this.getCredentials(CREDENTIAL_NAME);
-	const baseUrl = (credentials.baseUrl as string) || 'https://api.ainoflow.io';
+	const baseUrl = (credentials.baseUrl as string) || DEFAULT_BASE_URL;
 
 	try {
 		const response = await this.helpers.httpRequest({
@@ -695,7 +697,7 @@ async function submitViaBinary(
 		});
 		return response as ConvertApiResponse;
 	} catch (error) {
-		throw handleApiError.call(this, error, itemIndex, 'submit binary file');
+		throw handleApiError(this, error, itemIndex, 'submit binary file', 'job');
 	}
 }
 
@@ -718,8 +720,12 @@ async function executeGetResult(
 		);
 	}
 
+	// Get base URL from credentials
+	const baseURL = await getBaseUrl(this);
+
 	const requestOptions: IHttpRequestOptions = {
 		method: 'GET' as IHttpRequestMethods,
+		baseURL,
 		url: `/api/v1/convert/jobs/${encodeURIComponent(jobId)}`,
 	};
 
@@ -749,83 +755,7 @@ async function executeGetResult(
 
 		return response;
 	} catch (error) {
-		throw handleApiError.call(this, error, itemIndex, 'get job result');
+		throw handleApiError(this, error, itemIndex, 'get job result', 'job');
 	}
 }
 
-// ============================================================================
-// Error Handling
-// ============================================================================
-
-/**
- * Handle API errors and convert to appropriate NodeApiError.
- * Maps HTTP status codes to user-friendly error messages.
- */
-function handleApiError(
-	this: IExecuteFunctions,
-	error: unknown,
-	itemIndex: number,
-	operation: string,
-): NodeApiError {
-	const httpError = error as {
-		statusCode?: number;
-		message?: string;
-		response?: {
-			body?: {
-				error?: {
-					message?: string;
-				};
-			};
-		};
-	};
-
-	const statusCode = httpError.statusCode;
-	const apiMessage = httpError.response?.body?.error?.message || httpError.message || 'Unknown error';
-
-	// Map common HTTP status codes to user-friendly messages
-	let message: string;
-	let description: string;
-
-	switch (statusCode) {
-		case 400:
-			message = 'Invalid request';
-			description = apiMessage;
-			break;
-		case 401:
-			message = 'Invalid API key';
-			description = 'Check your Ainoflow API credentials';
-			break;
-		case 404:
-			message = 'Job not found';
-			description = 'The specified job ID does not exist or has expired';
-			break;
-		case 409:
-			message = 'Job already exists';
-			description = apiMessage;
-			break;
-		case 429:
-			message = 'Monthly limit reached';
-			description = 'Convert API jobs limit reached for current billing cycle';
-			break;
-		case 500:
-		case 502:
-		case 503:
-			message = 'Server error';
-			description = `Ainoflow API error: ${apiMessage}`;
-			break;
-		default:
-			message = `Failed to ${operation}`;
-			description = apiMessage;
-	}
-
-	return new NodeApiError(
-		this.getNode(),
-		error as JsonObject,
-		{
-			message,
-			description,
-			httpCode: statusCode?.toString(),
-			itemIndex,
-		},
-	);
-}

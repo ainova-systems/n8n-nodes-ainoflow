@@ -8,6 +8,7 @@ import type {
 	JsonObject,
 } from 'n8n-workflow';
 import { NodeConnectionTypes, NodeApiError, NodeOperationError } from 'n8n-workflow';
+import { CREDENTIAL_NAME, DEFAULT_BASE_URL, getBaseUrl, handleApiError } from '../GenericFunctions';
 
 // ============================================================================
 // Type Definitions
@@ -97,9 +98,6 @@ interface GetManyAdditionalFields {
 // ============================================================================
 // Constants
 // ============================================================================
-
-/** Credential type name */
-const CREDENTIAL_NAME = 'ainoflowApi';
 
 /** API base path */
 const API_BASE_PATH = '/api/v1/files';
@@ -712,8 +710,12 @@ async function executeDownload(
 	const category = this.getNodeParameter('category', itemIndex) as string;
 	const key = this.getNodeParameter('key', itemIndex) as string;
 
+	// Get base URL from credentials
+	const baseURL = await getBaseUrl(this);
+
 	const requestOptions: IHttpRequestOptions = {
 		method: 'GET' as IHttpRequestMethods,
+		baseURL,
 		url: `${API_BASE_PATH}/${encodeURIComponent(category)}/${encodeURIComponent(key)}`,
 		encoding: 'arraybuffer',
 		returnFullResponse: true,
@@ -748,7 +750,7 @@ async function executeDownload(
 			pairedItem: { item: itemIndex },
 		};
 	} catch (error) {
-		throw handleApiError.call(this, error, itemIndex, 'download file');
+		throw handleApiError(this, error, itemIndex, 'download file', 'file');
 	}
 }
 
@@ -762,8 +764,12 @@ async function executeDelete(
 	const category = this.getNodeParameter('category', itemIndex) as string;
 	const key = this.getNodeParameter('key', itemIndex) as string;
 
+	// Get base URL from credentials
+	const baseURL = await getBaseUrl(this);
+
 	const requestOptions: IHttpRequestOptions = {
 		method: 'DELETE' as IHttpRequestMethods,
+		baseURL,
 		url: `${API_BASE_PATH}/${encodeURIComponent(category)}/${encodeURIComponent(key)}`,
 	};
 
@@ -776,7 +782,7 @@ async function executeDelete(
 		// Return standard delete response per n8n UX guidelines
 		return { deleted: true };
 	} catch (error) {
-		throw handleApiError.call(this, error, itemIndex, 'delete file');
+		throw handleApiError(this, error, itemIndex, 'delete file', 'file');
 	}
 }
 
@@ -790,8 +796,12 @@ async function executeGetMetadata(
 	const category = this.getNodeParameter('category', itemIndex) as string;
 	const key = this.getNodeParameter('key', itemIndex) as string;
 
+	// Get base URL from credentials
+	const baseURL = await getBaseUrl(this);
+
 	const requestOptions: IHttpRequestOptions = {
 		method: 'GET' as IHttpRequestMethods,
+		baseURL,
 		url: `${API_BASE_PATH}/${encodeURIComponent(category)}/${encodeURIComponent(key)}/meta`,
 	};
 
@@ -803,7 +813,7 @@ async function executeGetMetadata(
 		);
 		return response as FileMetadata;
 	} catch (error) {
-		throw handleApiError.call(this, error, itemIndex, 'get file metadata');
+		throw handleApiError(this, error, itemIndex, 'get file metadata', 'file');
 	}
 }
 
@@ -818,11 +828,15 @@ async function executeGetUrl(
 	const key = this.getNodeParameter('key', itemIndex) as string;
 	const options = this.getNodeParameter('getUrlOptions', itemIndex, {}) as GetUrlAdditionalFields;
 
+	// Get base URL from credentials
+	const baseURL = await getBaseUrl(this);
+
 	const qs: Record<string, number> = {};
 	if (options.expirySeconds) qs.expirySeconds = options.expirySeconds;
 
 	const requestOptions: IHttpRequestOptions = {
 		method: 'GET' as IHttpRequestMethods,
+		baseURL,
 		url: `${API_BASE_PATH}/${encodeURIComponent(category)}/${encodeURIComponent(key)}/url`,
 		qs: Object.keys(qs).length > 0 ? qs : undefined,
 	};
@@ -835,7 +849,7 @@ async function executeGetUrl(
 		);
 		return response as FileUrlResponse;
 	} catch (error) {
-		throw handleApiError.call(this, error, itemIndex, 'get download URL');
+		throw handleApiError(this, error, itemIndex, 'get download URL', 'file');
 	}
 }
 
@@ -849,6 +863,9 @@ async function executeFileGetMany(
 	const category = this.getNodeParameter('category', itemIndex) as string;
 	const returnAll = this.getNodeParameter('returnAll', itemIndex) as boolean;
 	const options = this.getNodeParameter('getManyOptions', itemIndex, {}) as GetManyAdditionalFields;
+
+	// Get base URL from credentials
+	const baseURL = await getBaseUrl(this);
 
 	if (returnAll) {
 		// Paginate through all results
@@ -868,6 +885,7 @@ async function executeFileGetMany(
 
 			const requestOptions: IHttpRequestOptions = {
 				method: 'GET' as IHttpRequestMethods,
+				baseURL,
 				url: `${API_BASE_PATH}/${encodeURIComponent(category)}`,
 				qs,
 			};
@@ -890,7 +908,7 @@ async function executeFileGetMany(
 				hasMore = items.length === MAX_LIMIT_PER_REQUEST;
 				offset += MAX_LIMIT_PER_REQUEST;
 			} catch (error) {
-				throw handleApiError.call(this, error, itemIndex, 'get many files');
+				throw handleApiError(this, error, itemIndex, 'get many files', 'file');
 			}
 		}
 
@@ -908,6 +926,7 @@ async function executeFileGetMany(
 
 		const requestOptions: IHttpRequestOptions = {
 			method: 'GET' as IHttpRequestMethods,
+			baseURL,
 			url: `${API_BASE_PATH}/${encodeURIComponent(category)}`,
 			qs,
 		};
@@ -924,7 +943,7 @@ async function executeFileGetMany(
 				? response
 				: (response as { items: FileListItem[] }).items || [];
 		} catch (error) {
-			throw handleApiError.call(this, error, itemIndex, 'get many files');
+			throw handleApiError(this, error, itemIndex, 'get many files', 'file');
 		}
 	}
 }
@@ -960,8 +979,12 @@ async function executeCategoryGetMany(
 	this: IExecuteFunctions,
 	itemIndex: number,
 ): Promise<CategoryInfo[]> {
+	// Get base URL from credentials
+	const baseURL = await getBaseUrl(this);
+
 	const requestOptions: IHttpRequestOptions = {
 		method: 'GET' as IHttpRequestMethods,
+		baseURL,
 		url: API_BASE_PATH,
 	};
 
@@ -973,7 +996,7 @@ async function executeCategoryGetMany(
 		);
 		return response as CategoryInfo[];
 	} catch (error) {
-		throw handleApiError.call(this, error, itemIndex, 'get categories');
+		throw handleApiError(this, error, itemIndex, 'get categories', 'file');
 	}
 }
 
@@ -1003,7 +1026,7 @@ async function uploadViaBinary(
 	// Get credentials for manual header construction
 	// Note: httpRequestWithAuthentication doesn't support raw Buffer body with multipart
 	const credentials = await this.getCredentials(CREDENTIAL_NAME);
-	const baseUrl = (credentials.baseUrl as string) || 'https://api.ainoflow.io';
+	const baseUrl = (credentials.baseUrl as string) || DEFAULT_BASE_URL;
 
 	try {
 		const response = await this.helpers.httpRequest({
@@ -1018,7 +1041,7 @@ async function uploadViaBinary(
 		});
 		return response as FileUploadResponse;
 	} catch (error) {
-		throw handleApiError.call(this, error, itemIndex, 'upload file');
+		throw handleApiError(this, error, itemIndex, 'upload file', 'file');
 	}
 }
 
@@ -1042,26 +1065,31 @@ async function uploadViaUrl(
 		);
 	}
 
+	// Get base URL from credentials
+	const baseURL = await getBaseUrl(this);
+
 	const { body, boundary } = buildUrlMultipartBody(sourceUrl, additionalFields);
 
-	// Get credentials for manual header construction
-	const credentials = await this.getCredentials(CREDENTIAL_NAME);
-	const baseUrl = (credentials.baseUrl as string) || 'https://api.ainoflow.io';
+	const requestOptions: IHttpRequestOptions = {
+		method: method as IHttpRequestMethods,
+		baseURL,
+		url,
+		headers: {
+			'Content-Type': `multipart/form-data; boundary=${boundary}`,
+		},
+		body,
+		timeout: UPLOAD_TIMEOUT_MS,
+	};
 
 	try {
-		const response = await this.helpers.httpRequest({
-			method,
-			url: `${baseUrl}${url}`,
-			headers: {
-				'Authorization': `Bearer ${credentials.apiKey}`,
-				'Content-Type': `multipart/form-data; boundary=${boundary}`,
-			},
-			body,
-			timeout: UPLOAD_TIMEOUT_MS,
-		});
+		const response = await this.helpers.httpRequestWithAuthentication.call(
+			this,
+			CREDENTIAL_NAME,
+			requestOptions,
+		);
 		return response as FileUploadResponse;
 	} catch (error) {
-		throw handleApiError.call(this, error, itemIndex, 'upload file from URL');
+		throw handleApiError(this, error, itemIndex, 'upload file from URL', 'file');
 	}
 }
 
@@ -1137,79 +1165,3 @@ function buildUrlMultipartBody(
 	return { body: Buffer.concat(parts), boundary };
 }
 
-// ============================================================================
-// Error Handling
-// ============================================================================
-
-/**
- * Handle API errors and convert to appropriate NodeApiError.
- * Maps HTTP status codes to user-friendly error messages.
- */
-function handleApiError(
-	this: IExecuteFunctions,
-	error: unknown,
-	itemIndex: number,
-	operation: string,
-): NodeApiError {
-	const httpError = error as {
-		statusCode?: number;
-		message?: string;
-		response?: {
-			body?: {
-				error?: {
-					message?: string;
-				};
-			};
-		};
-	};
-
-	const statusCode = httpError.statusCode;
-	const apiMessage = httpError.response?.body?.error?.message || httpError.message || 'Unknown error';
-
-	// Map common HTTP status codes to user-friendly messages
-	let message: string;
-	let description: string;
-
-	switch (statusCode) {
-		case 400:
-			message = 'Invalid request';
-			description = apiMessage;
-			break;
-		case 401:
-			message = 'Invalid API key';
-			description = 'Check your Ainoflow API credentials';
-			break;
-		case 404:
-			message = 'File not found';
-			description = 'The specified file does not exist or has been deleted';
-			break;
-		case 409:
-			message = 'File already exists';
-			description = 'Use "Create or Replace" operation to overwrite existing files';
-			break;
-		case 429:
-			message = 'Storage limit reached';
-			description = 'Delete some files or upgrade your plan to upload more';
-			break;
-		case 500:
-		case 502:
-		case 503:
-			message = 'Server error';
-			description = `Ainoflow API error: ${apiMessage}`;
-			break;
-		default:
-			message = `Failed to ${operation}`;
-			description = apiMessage;
-	}
-
-	return new NodeApiError(
-		this.getNode(),
-		error as JsonObject,
-		{
-			message,
-			description,
-			httpCode: statusCode?.toString(),
-			itemIndex,
-		},
-	);
-}

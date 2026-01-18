@@ -8,6 +8,7 @@ import type {
 	JsonObject,
 } from 'n8n-workflow';
 import { NodeConnectionTypes, NodeApiError, NodeOperationError } from 'n8n-workflow';
+import { CREDENTIAL_NAME, getBaseUrl, handleApiError } from '../GenericFunctions';
 
 // ============================================================================
 // Type Definitions
@@ -112,9 +113,6 @@ const SORT_ORDER_OPTIONS = [
 	{ name: 'Ascending', value: 'asc', description: 'Sort from lowest to highest' },
 	{ name: 'Descending', value: 'desc', description: 'Sort from highest to lowest' },
 ] as const;
-
-/** Credential type name */
-const CREDENTIAL_NAME = 'ainoflowApi';
 
 /** API base path */
 const API_BASE_PATH = '/api/v1/storage/json';
@@ -658,6 +656,9 @@ async function executeCreate(
 	const category = this.getNodeParameter('category', itemIndex) as string;
 	const additionalFields = this.getNodeParameter('additionalFields', itemIndex) as CreateAdditionalFields;
 
+	// Get base URL from credentials
+	const baseURL = await getBaseUrl(this);
+
 	// Build data from user input
 	const data = buildDataFromInput.call(this, itemIndex);
 
@@ -672,6 +673,7 @@ async function executeCreate(
 
 	const requestOptions: IHttpRequestOptions = {
 		method: 'POST' as IHttpRequestMethods,
+		baseURL,
 		url,
 		body: data,
 		qs: Object.keys(qs).length > 0 ? qs : undefined,
@@ -685,7 +687,7 @@ async function executeCreate(
 		);
 		return response as RecordMutationResponse;
 	} catch (error) {
-		throw handleApiError.call(this, error, itemIndex, 'create record');
+		throw handleApiError(this, error, itemIndex, 'create record', 'record');
 	}
 }
 
@@ -700,6 +702,9 @@ async function executeCreateOrReplace(
 	const key = this.getNodeParameter('key', itemIndex) as string;
 	const additionalFields = this.getNodeParameter('additionalFields', itemIndex) as UpdateAdditionalFields;
 
+	// Get base URL from credentials
+	const baseURL = await getBaseUrl(this);
+
 	// Build data from user input
 	const data = buildDataFromInput.call(this, itemIndex);
 
@@ -708,6 +713,7 @@ async function executeCreateOrReplace(
 
 	const requestOptions: IHttpRequestOptions = {
 		method: 'PUT' as IHttpRequestMethods,
+		baseURL,
 		url: `${API_BASE_PATH}/${encodeURIComponent(category)}/${encodeURIComponent(key)}`,
 		body: data,
 		qs: Object.keys(qs).length > 0 ? qs : undefined,
@@ -721,7 +727,7 @@ async function executeCreateOrReplace(
 		);
 		return response as RecordMutationResponse;
 	} catch (error) {
-		throw handleApiError.call(this, error, itemIndex, 'create or replace record');
+		throw handleApiError(this, error, itemIndex, 'create or replace record', 'record');
 	}
 }
 
@@ -735,11 +741,15 @@ async function executeUpdate(
 	const category = this.getNodeParameter('category', itemIndex) as string;
 	const key = this.getNodeParameter('key', itemIndex) as string;
 
+	// Get base URL from credentials
+	const baseURL = await getBaseUrl(this);
+
 	// Build data from user input
 	const data = buildDataFromInput.call(this, itemIndex);
 
 	const requestOptions: IHttpRequestOptions = {
 		method: 'PATCH' as IHttpRequestMethods,
+		baseURL,
 		url: `${API_BASE_PATH}/${encodeURIComponent(category)}/${encodeURIComponent(key)}`,
 		body: data,
 	};
@@ -752,7 +762,7 @@ async function executeUpdate(
 		);
 		return response as RecordMutationResponse;
 	} catch (error) {
-		throw handleApiError.call(this, error, itemIndex, 'update record');
+		throw handleApiError(this, error, itemIndex, 'update record', 'record');
 	}
 }
 
@@ -766,8 +776,12 @@ async function executeGet(
 	const category = this.getNodeParameter('category', itemIndex) as string;
 	const key = this.getNodeParameter('key', itemIndex) as string;
 
+	// Get base URL from credentials
+	const baseURL = await getBaseUrl(this);
+
 	const requestOptions: IHttpRequestOptions = {
 		method: 'GET' as IHttpRequestMethods,
+		baseURL,
 		url: `${API_BASE_PATH}/${encodeURIComponent(category)}/${encodeURIComponent(key)}`,
 	};
 
@@ -779,7 +793,7 @@ async function executeGet(
 		);
 		return response as JsonObject;
 	} catch (error) {
-		throw handleApiError.call(this, error, itemIndex, 'get record');
+		throw handleApiError(this, error, itemIndex, 'get record', 'record');
 	}
 }
 
@@ -793,8 +807,12 @@ async function executeDelete(
 	const category = this.getNodeParameter('category', itemIndex) as string;
 	const key = this.getNodeParameter('key', itemIndex) as string;
 
+	// Get base URL from credentials
+	const baseURL = await getBaseUrl(this);
+
 	const requestOptions: IHttpRequestOptions = {
 		method: 'DELETE' as IHttpRequestMethods,
+		baseURL,
 		url: `${API_BASE_PATH}/${encodeURIComponent(category)}/${encodeURIComponent(key)}`,
 	};
 
@@ -807,7 +825,7 @@ async function executeDelete(
 		// Return standard delete response per n8n UX guidelines
 		return { deleted: true };
 	} catch (error) {
-		throw handleApiError.call(this, error, itemIndex, 'delete record');
+		throw handleApiError(this, error, itemIndex, 'delete record', 'record');
 	}
 }
 
@@ -821,8 +839,12 @@ async function executeGetMetadata(
 	const category = this.getNodeParameter('category', itemIndex) as string;
 	const key = this.getNodeParameter('key', itemIndex) as string;
 
+	// Get base URL from credentials
+	const baseURL = await getBaseUrl(this);
+
 	const requestOptions: IHttpRequestOptions = {
 		method: 'GET' as IHttpRequestMethods,
+		baseURL,
 		url: `${API_BASE_PATH}/${encodeURIComponent(category)}/${encodeURIComponent(key)}/meta`,
 	};
 
@@ -834,7 +856,7 @@ async function executeGetMetadata(
 		);
 		return response as RecordMetadataResponse;
 	} catch (error) {
-		throw handleApiError.call(this, error, itemIndex, 'get record metadata');
+		throw handleApiError(this, error, itemIndex, 'get record metadata', 'record');
 	}
 }
 
@@ -848,6 +870,9 @@ async function executeRecordGetMany(
 	const category = this.getNodeParameter('category', itemIndex) as string;
 	const returnAll = this.getNodeParameter('returnAll', itemIndex) as boolean;
 	const additionalFields = this.getNodeParameter('additionalFields', itemIndex) as GetManyAdditionalFields;
+
+	// Get base URL from credentials
+	const baseURL = await getBaseUrl(this);
 
 	if (returnAll) {
 		// Paginate through all results
@@ -867,6 +892,7 @@ async function executeRecordGetMany(
 
 			const requestOptions: IHttpRequestOptions = {
 				method: 'GET' as IHttpRequestMethods,
+				baseURL,
 				url: `${API_BASE_PATH}/${encodeURIComponent(category)}`,
 				qs,
 			};
@@ -889,7 +915,7 @@ async function executeRecordGetMany(
 				hasMore = items.length === MAX_LIMIT_PER_REQUEST;
 				page++;
 			} catch (error) {
-				throw handleApiError.call(this, error, itemIndex, 'get many records');
+				throw handleApiError(this, error, itemIndex, 'get many records', 'record');
 			}
 		}
 
@@ -909,6 +935,7 @@ async function executeRecordGetMany(
 
 		const requestOptions: IHttpRequestOptions = {
 			method: 'GET' as IHttpRequestMethods,
+			baseURL,
 			url: `${API_BASE_PATH}/${encodeURIComponent(category)}`,
 			qs,
 		};
@@ -925,7 +952,7 @@ async function executeRecordGetMany(
 				? response
 				: (response as { items: RecordListItem[] }).items || [];
 		} catch (error) {
-			throw handleApiError.call(this, error, itemIndex, 'get many records');
+			throw handleApiError(this, error, itemIndex, 'get many records', 'record');
 		}
 	}
 }
@@ -961,8 +988,12 @@ async function executeCategoryGetMany(
 	this: IExecuteFunctions,
 	itemIndex: number,
 ): Promise<CategoryItem[]> {
+	// Get base URL from credentials
+	const baseURL = await getBaseUrl(this);
+
 	const requestOptions: IHttpRequestOptions = {
 		method: 'GET' as IHttpRequestMethods,
+		baseURL,
 		url: API_BASE_PATH,
 	};
 
@@ -974,7 +1005,7 @@ async function executeCategoryGetMany(
 		);
 		return response as CategoryItem[];
 	} catch (error) {
-		throw handleApiError.call(this, error, itemIndex, 'get categories');
+		throw handleApiError(this, error, itemIndex, 'get categories', 'record');
 	}
 }
 
@@ -1063,78 +1094,3 @@ function buildTtlQueryParams(
 	return qs;
 }
 
-// ============================================================================
-// Error Handling
-// ============================================================================
-
-/**
- * Handle API errors and convert to appropriate NodeApiError.
- */
-function handleApiError(
-	this: IExecuteFunctions,
-	error: unknown,
-	itemIndex: number,
-	operation: string,
-): NodeApiError {
-	const httpError = error as {
-		statusCode?: number;
-		message?: string;
-		response?: {
-			body?: {
-				error?: {
-					message?: string;
-				};
-			};
-		};
-	};
-
-	const statusCode = httpError.statusCode;
-	const apiMessage = httpError.response?.body?.error?.message || httpError.message || 'Unknown error';
-
-	// Map common HTTP status codes to user-friendly messages
-	let message: string;
-	let description: string;
-
-	switch (statusCode) {
-		case 400:
-			message = 'Invalid request';
-			description = apiMessage;
-			break;
-		case 401:
-			message = 'Invalid API key';
-			description = 'Check your Ainoflow API credentials';
-			break;
-		case 404:
-			message = 'Record not found';
-			description = 'The specified record does not exist';
-			break;
-		case 409:
-			message = 'Record already exists';
-			description = apiMessage;
-			break;
-		case 429:
-			message = 'Storage limit reached';
-			description = 'Storage API count limit reached for current scope';
-			break;
-		case 500:
-		case 502:
-		case 503:
-			message = 'Server error';
-			description = `Ainoflow API error: ${apiMessage}`;
-			break;
-		default:
-			message = `Failed to ${operation}`;
-			description = apiMessage;
-	}
-
-	return new NodeApiError(
-		this.getNode(),
-		error as JsonObject,
-		{
-			message,
-			description,
-			httpCode: statusCode?.toString(),
-			itemIndex,
-		},
-	);
-}

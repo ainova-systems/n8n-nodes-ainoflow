@@ -6,7 +6,7 @@ n8n community nodes for [Ainoflow](https://ainoflow.io) API services.
 
 | Node | Description |
 |------|-------------|
-| **Ainoflow Convert** | Convert documents, images, and audio to text using OCR and transcription |
+| **Ainoflow Convert** | Extract text or convert to PDF from documents, images, and audio (OCR & transcription) |
 | **Ainoflow Files** | Store and manage binary files in object storage |
 | **Ainoflow Storage** | Store and retrieve JSON documents in key-value storage |
 
@@ -29,13 +29,13 @@ All nodes use the shared **Ainoflow API** credential:
 
 ## Ainoflow Convert
 
-Convert documents, images, and audio files to text.
+Extract text or convert to PDF from documents, images, and audio files.
 
 ### Operations
 
 | Operation | Description |
 |-----------|-------------|
-| **Convert Document** | Convert document, image, or audio to text |
+| **Convert File** | Extract text or convert to PDF from document, image, or audio |
 | **Get Result** | Get result of conversion job |
 
 ### Input Sources
