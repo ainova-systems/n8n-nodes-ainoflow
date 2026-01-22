@@ -506,7 +506,6 @@ export class AinoflowFiles implements INodeType {
 					show: {
 						resource: ['file'],
 						operation: ['getMany'],
-						returnAll: [false],
 					},
 				},
 				default: false,
@@ -612,7 +611,6 @@ export class AinoflowFiles implements INodeType {
 					show: {
 						resource: ['category'],
 						operation: ['getMany'],
-						returnAll: [false],
 					},
 				},
 				default: false,
@@ -957,7 +955,8 @@ async function executeFileGetMany(
 	const baseURL = await getBaseUrl(this);
 
 	if (returnAll) {
-		// Paginate through all results - aggregate not available with returnAll
+		// Paginate through all results
+		const aggregate = this.getNodeParameter('aggregate', itemIndex) as boolean;
 		const allItems: FileListItem[] = [];
 		let page = 1;
 		let hasMore = true;
@@ -1000,6 +999,17 @@ async function executeFileGetMany(
 			}
 		}
 
+		// Return aggregated response or array based on aggregate parameter
+		if (aggregate) {
+			return {
+				category,
+				items: allItems,
+				totalCount: allItems.length,
+				page: 1,
+				pageSize: allItems.length,
+				totalPages: 1,
+			} as AggregatedResponse<FileListItem>;
+		}
 		return allItems;
 	} else {
 		// Single request with limit, page, and optional aggregate
@@ -1082,6 +1092,7 @@ async function executeCategoryGetMany(
 
 	if (returnAll) {
 		// Paginate through all results
+		const aggregate = this.getNodeParameter('aggregate', itemIndex) as boolean;
 		const allItems: CategoryInfo[] = [];
 		let page = 1;
 		let hasMore = true;
@@ -1120,6 +1131,16 @@ async function executeCategoryGetMany(
 			}
 		}
 
+		// Return aggregated response or array based on aggregate parameter
+		if (aggregate) {
+			return {
+				items: allItems,
+				totalCount: allItems.length,
+				page: 1,
+				pageSize: allItems.length,
+				totalPages: 1,
+			} as AggregatedResponse<CategoryInfo>;
+		}
 		return allItems;
 	} else {
 		// Single request with limit, page, and optional aggregate

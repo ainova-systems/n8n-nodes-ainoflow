@@ -447,7 +447,6 @@ export class AinoflowStorage implements INodeType {
 					show: {
 						resource: ['record'],
 						operation: ['getMany'],
-						returnAll: [false],
 					},
 				},
 				default: false,
@@ -625,7 +624,6 @@ export class AinoflowStorage implements INodeType {
 					show: {
 						resource: ['category'],
 						operation: ['getMany'],
-						returnAll: [false],
 					},
 				},
 				default: false,
@@ -975,7 +973,8 @@ async function executeRecordGetMany(
 	const baseURL = await getBaseUrl(this);
 
 	if (returnAll) {
-		// Paginate through all results - aggregate not available with returnAll
+		// Paginate through all results
+		const aggregate = this.getNodeParameter('aggregate', itemIndex) as boolean;
 		const allItems: RecordListItem[] = [];
 		let page = 1;
 		let hasMore = true;
@@ -1018,6 +1017,17 @@ async function executeRecordGetMany(
 			}
 		}
 
+		// Return aggregated response or array based on aggregate parameter
+		if (aggregate) {
+			return {
+				category,
+				items: allItems,
+				totalCount: allItems.length,
+				page: 1,
+				pageSize: allItems.length,
+				totalPages: 1,
+			} as AggregatedResponse<RecordListItem>;
+		}
 		return allItems;
 	} else {
 		// Single request with limit, page, and optional aggregate
@@ -1100,6 +1110,7 @@ async function executeCategoryGetMany(
 
 	if (returnAll) {
 		// Paginate through all results
+		const aggregate = this.getNodeParameter('aggregate', itemIndex) as boolean;
 		const allItems: CategoryItem[] = [];
 		let page = 1;
 		let hasMore = true;
@@ -1138,6 +1149,16 @@ async function executeCategoryGetMany(
 			}
 		}
 
+		// Return aggregated response or array based on aggregate parameter
+		if (aggregate) {
+			return {
+				items: allItems,
+				totalCount: allItems.length,
+				page: 1,
+				pageSize: allItems.length,
+				totalPages: 1,
+			} as AggregatedResponse<CategoryItem>;
+		}
 		return allItems;
 	} else {
 		// Single request with limit, page, and optional aggregate
