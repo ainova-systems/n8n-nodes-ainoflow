@@ -1019,13 +1019,12 @@ async function executeRecordGetMany(
 
 		// Return aggregated response or array based on aggregate parameter
 		if (aggregate) {
+			// When returnAll=true, pagination metadata is not meaningful
+			// Only return items and totalCount
 			return {
 				category,
 				items: allItems,
 				totalCount: allItems.length,
-				page: 1,
-				pageSize: allItems.length,
-				totalPages: 1,
 			} as AggregatedResponse<RecordListItem>;
 		}
 		return allItems;
@@ -1151,12 +1150,11 @@ async function executeCategoryGetMany(
 
 		// Return aggregated response or array based on aggregate parameter
 		if (aggregate) {
+			// When returnAll=true, pagination metadata is not meaningful
+			// Only return items and totalCount
 			return {
 				items: allItems,
 				totalCount: allItems.length,
-				page: 1,
-				pageSize: allItems.length,
-				totalPages: 1,
 			} as AggregatedResponse<CategoryItem>;
 		}
 		return allItems;
