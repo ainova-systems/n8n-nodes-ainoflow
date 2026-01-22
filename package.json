@@ -1,6 +1,6 @@
 {
 	"name": "@ainoflow/n8n-nodes-ainoflow",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"description": "n8n community nodes for Ainoflow API - Document conversion (OCR/transcription), file storage, and JSON storage",
 	"license": "MIT",
 	"homepage": "https://ainoflow.io",
