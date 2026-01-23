@@ -166,14 +166,14 @@ export class AinoflowFiles implements INodeType {
 				noDataExpression: true,
 				options: [
 					{
-						name: 'Category',
-						value: 'category',
-						description: 'Operations on file categories',
-					},
-					{
 						name: 'File',
 						value: 'file',
 						description: 'Operations on individual files',
+					},
+					{
+						name: 'Category',
+						value: 'category',
+						description: 'Operations on file categories',
 					},
 				],
 				default: 'file',
@@ -359,6 +359,7 @@ export class AinoflowFiles implements INodeType {
 				},
 				default: '',
 				required: true,
+				placeholder: 'e.g. https://example.com/file.pdf',
 				description: 'URL to download file from',
 			},
 

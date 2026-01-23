@@ -55,7 +55,7 @@ export function handleApiError(
 	};
 
 	const statusCode = httpError.statusCode;
-	const apiMessage = httpError.response?.body?.error?.message || httpError.message || 'Unknown error';
+	const apiMessage = httpError.response?.body?.error?.message || httpError.message || 'Unknown issue';
 
 	// Entity-specific messages
 	const notFoundMessages: Record<EntityType, { message: string; description: string }> = {
@@ -104,11 +104,11 @@ export function handleApiError(
 		case 500:
 		case 502:
 		case 503:
-			message = 'Server error';
-			description = `Ainoflow API error: ${apiMessage}`;
+			message = 'Server returned an unexpected response';
+			description = `Ainoflow API response: ${apiMessage}`;
 			break;
 		default:
-			message = `Failed to ${operation}`;
+			message = `Could not ${operation}`;
 			description = apiMessage;
 	}
 

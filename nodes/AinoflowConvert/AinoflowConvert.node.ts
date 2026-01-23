@@ -306,7 +306,7 @@ export class AinoflowConvert implements INodeType {
 				},
 				default: '',
 				required: true,
-				placeholder: 'https://example.com/document.pdf',
+				placeholder: 'e.g. https://example.com/document.pdf',
 				description: 'URL to download document from',
 			},
 
@@ -401,7 +401,7 @@ export class AinoflowConvert implements INodeType {
 						name: 'webhookUrl',
 						type: 'string',
 						default: '',
-						placeholder: 'https://example.com/webhook',
+						placeholder: 'e.g. https://example.com/webhook',
 						description: 'URL to notify when processing is complete (webhook mode only)',
 						displayOptions: {
 							show: {
@@ -426,7 +426,7 @@ export class AinoflowConvert implements INodeType {
 				},
 				default: '',
 				required: true,
-				placeholder: 'e.g., 550e8400-e29b-41d4-a716-446655440000',
+				placeholder: 'e.g. 550e8400-e29b-41d4-a716-446655440000',
 				description: 'Job ID returned from convert operation',
 			},
 

@@ -276,7 +276,7 @@ export class AinoflowStorage implements INodeType {
 				},
 				default: '',
 				required: true,
-				placeholder: 'e.g., invoices',
+				placeholder: 'e.g. invoices',
 				description: 'Category (namespace) for the record',
 			},
 
@@ -295,7 +295,7 @@ export class AinoflowStorage implements INodeType {
 				},
 				default: '',
 				required: true,
-				placeholder: 'e.g., inv-12345',
+				placeholder: 'e.g. inv-12345',
 				description: 'Unique key of the record',
 			},
 
@@ -489,7 +489,7 @@ export class AinoflowStorage implements INodeType {
 						name: 'key',
 						type: 'string',
 						default: '',
-						placeholder: 'e.g., inv-12345',
+						placeholder: 'e.g. inv-12345',
 						description: 'Custom key. If empty, UUID is generated.',
 					},
 				],
